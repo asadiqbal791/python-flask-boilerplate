@@ -1,0 +1,65 @@
+version: "3.9"
+
+services:
+  app:
+    build: .
+    env_file: .env
+    ports:
+      - "${PORT:-5000}:5000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - flask_net
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-flask_db}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - flask_net
+
+  mongo:
+    image: mongo:7
+    environment:
+      MONGO_INITDB_DATABASE: flask_db
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - flask_net
+    profiles:
+      - mongo
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --save 60 1 --loglevel warning
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - flask_net
+
+volumes:
+  postgres_data:
+  mongo_data:
+  redis_data:
+
+networks:
+  flask_net:
+    driver: bridge
